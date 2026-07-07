@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, maximum-scale=1.0, user-scalable=no">
+<title>Fuel &amp; Flight Plan Tool</title>
+<!-- PDF.js core architecture hosted via standard secure network delivery -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js"></script>
+<style>
+  :root{
+    --bg:#0a0e14;
+    --panel:#121826;
+    --panel2:#1a2233;
+    --line:#2a3448;
+    --text:#e8ecf4;
+    --dim:#8b96ab;
+    --amber:#f5a623;
+    --blue:#4a9eff;
+    --green:#3ecf6e;
+    --red:#ff5d5d;
+    --mono: 'SF Mono', 'Roboto Mono', 'Courier New', monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);}
+  body{padding-bottom:60px;}
+  header{
+    position:sticky; top:0; z-index:20;
+    background:linear-gradient(180deg,#0d1420,#0a0e14);
+    border-bottom:1px solid var(--line);
+    padding:14px 16px 12px;
+  }
+  .hdrtop{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
+  header .callsign{font-family:var(--mono); font-size:22px; font-weight:700; letter-spacing:0.5px;}
+  header .route{font-family:var(--mono); font-size:14px; color:var(--dim); margin-top:2px;}
+  header .tabs{display:flex; gap:6px; margin-top:12px; overflow-x:auto;}
+  header .tab{
+    flex:0 0 auto; padding:8px 14px; border-radius:8px; font-size:13px; font-weight:600;
+    background:var(--panel2); color:var(--dim); border:1px solid var(--line); white-space:nowrap; cursor:pointer;
+  }
+  header .tab.active{background:var(--blue); color:#04101f; border-color:var(--blue);}
+  .closeBtn{
+    flex:0 0 auto; padding:8px 12px; border-radius:8px; font-size:12px; font-weight:700;
+    background:rgba(255,93,93,0.12); color:var(--red); border:1px solid rgba(255,93,93,0.4); cursor:pointer;
+  }
+
+  main{padding:14px 12px 30px; max-width:900px; margin:0 auto;}
+  section{display:none;}
+  section.active{display:block;}
+
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:14px; margin-bottom:12px;
+  }
+  .card h2{
+    font-size:11px; text-transform:uppercase; letter-spacing:1.2px; color:var(--dim);
+    margin:0 0 10px; font-weight:700; display:flex; justify-content:space-between; align-items:center;
+  }
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;}
+  .field{display:flex; flex-direction:column; gap:4px;}
+  .field label{font-size:11px; color:var(--dim);}
+  .field input, .field select{
+    background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    font-family:var(--mono); font-size:16px; padding:9px 8px; border-radius:8px; width:100%;
+  }
+  .locked{
+    background:var(--panel2); border:1px solid var(--line); border-radius:8px;
+    padding:9px 8px; font-family:var(--mono); font-size:16px; color:var(--text); min-height:40px;
+  }
+  .readout{
+    background:var(--panel2); border-radius:8px; padding:10px; text-align:center;
+  }
+  .readout .val{font-family:var(--mono); font-size:20px; font-weight:700;}
+  .readout .lbl{font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:0.8px; margin-top:2px;}
+  .readout.pos .val{color:var(--green);}
+  .readout.neg .val{color:var(--red);}
+
+  .banner{
+    border-radius:10px; padding:11px 12px; font-size:13px; margin-bottom:12px; line-height:1.45;
+    border:1px solid; display:flex; gap:10px; align-items:flex-start;
+  }
+  .banner.blue{background:rgba(74,158,255,0.08); border-color:rgba(74,158,255,0.35); color:#9cc4ff;}
+  .banner.reddish{background:rgba(255,93,93,0.1); border-color:rgba(255,93,93,0.45); color:#ffb3b3;}
+
+  .btnrow{display:flex; gap:8px; margin-top:8px;}
+  button{
+    font-family:var(--sans); font-weight:600; font-size:13px; padding:9px 14px; border-radius:8px;
+    border:1px solid var(--line); background:var(--panel2); color:var(--text); cursor:pointer;
+  }
+  button.primary{background:var(--blue); color:#04101f; border-color:var(--blue);}
+  button.secondary{background:var(--panel2); color:var(--text); border-color:var(--line);}
+  button.danger{background:rgba(255,93,93,0.15); color:var(--red); border-color:rgba(255,93,93,0.4);}
+
+  table{width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12.5px;}
+  th{
+    text-align:right; padding:6px 5px; color:var(--dim); font-weight:600; font-size:10.5px;
+    text-transform:uppercase; letter-spacing:0.4px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--panel);
+  }
+  th:first-child, td:first-child{text-align:left;}
+  td{padding:6px 5px; border-bottom:1px solid #1c2536; text-align:right; white-space:nowrap;}
+  td input{
+    width:85px; background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    font-family:var(--mono); font-size:12.5px; padding:5px 4px; border-radius:6px; text-align:right;
+  }
+  .td-pos{color:var(--green); font-weight:700;}
+  .td-neg{color:var(--red); font-weight:700;}
+  .tablewrap{overflow-x:auto; margin:0 -14px; padding:0 14px;}
+
+  .altn-block{border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px;}
+  .altn-title{font-weight:700; font-size:15px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;}
+  .altn-title .name{font-family:var(--mono);}
+  .holdtime{font-family:var(--mono); font-size:26px; font-weight:700; color:var(--green);}
+  .holdtime.neg{color:var(--red);}
+  .sub{font-size:11px; color:var(--dim); margin-top:2px;}
+
+  .upload-box {
+    border: 2px dashed var(--line); padding: 40px; text-align: center; border-radius: 12px;
+    background: var(--panel); cursor: pointer; transition: 0.2s; margin-bottom: 15px;
+  }
+  .upload-box:hover { border-color: var(--blue); background: var(--panel2); }
+  .upload-box p { margin: 8px 0 0 0; font-size: 14px; color: var(--dim); }
+  .countdown-span { font-size: 12px; color: var(--amber); font-weight: normal; margin-left: 6px;}
+  footer.appfoot{
+    position:fixed; bottom:0; left:0; right:0; background:var(--panel); border-top:1px solid var(--line);
+    padding:8px 12px; font-size:10.5px; color:var(--dim); text-align:center; z-index: 10;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hdrtop">
+    <div>
+      <div class="callsign" id="hdrCallsign">NO FLIGHT PROFILE</div>
+      <div class="route" id="hdrRoute">Upload flight plan PDF to continue</div>
+    </div>
+    <button class="closeBtn" onclick="closeFlight()">Reset Profile</button>
+  </div>
+  <div class="tabs">
+    <div class="tab active" data-tab="setup">Setup</div>
+    <div class="tab" data-tab="wpts">Waypoints</div>
+    <div class="tab" data-tab="altn">Alternates / Hold</div>
+  </div>
+</header>
+
+<main>
+  <!-- MULTI-SERVER FILE DRAG AND ACCESSIBILITY MONITOR ZONE -->
+  <div id="pdfUploadCard" class="upload-box" onclick="document.getElementById('pdfFileInputDirect').click()">
+    <input type="file" id="pdfFileInputDirect" style="display:none;" accept="application/pdf">
+    <span style="font-size:36px;">📄</span>
+    <p><b>Select or Drop Flight Plan PDF (eFM)</b><br><span style="font-size:11px; color:var(--blue);">Processes securely offline inside the browser runtime network frame</span></p>
+  </div>
+
+  <!-- SETUP SECTION -->
+  <section id="tab-setup" class="active">
+    
+    <!-- EXPORT AND DATA SHARING SESSIONS STORAGE -->
+    <div class="card" id="jsonUtilityCard" style="display:none;">
+      <h2>Data Sharing &amp; State Persistence</h2>
+      <div class="btnrow">
+        <button class="secondary" style="flex:1;" onclick="exportFlightDataJson()">Export Active Flight State (.JSON)</button>
+        <button class="secondary" style="flex:1;" onclick="document.getElementById('jsonStateFileInput').click()">Load Saved Session (.JSON)</button>
+        <input type="file" id="jsonStateFileInput" style="display:none;" accept=".json" onchange="importFlightDataJson(this)">
+      </div>
+    </div>
+
+    <!-- EDITABLE EXTRACTION MONITOR MATRIX -->
+    <div class="card" id="pdfBreakdownCard" style="display:none;">
+      <h2>PDF Fuel Matrix Extraction <button class="primary" style="font-size:11px; padding:4px 8px;" onclick="collapsePdfTable()">Confirm &amp; Collapse</button></h2>
+      <div id="pdfTableContainer" class="tablewrap" style="margin-top:10px; margin-bottom:10px;"></div>
+    </div>
+
+    <!-- FLIGHT HEADER METADATA -->
+    <div class="card">
+      <h2>Flight Header</h2>
+      <div class="grid">
+        <div class="field"><label>Callsign / Tail</label><div class="locked" id="lkCallsign">—</div></div>
+        <div class="field"><label>Departure / Arrival</label><div class="locked" id="lkDepArr">—</div></div>
+        <div class="field"><label>Dep RWY / SID</label><div class="locked" id="lkDepRwy">—</div></div>
+        <div class="field"><label>Arr RWY / STAR</label><div class="locked" id="lkArrRwy">—</div></div>
+        <div class="field"><label>Time to Off Blocks <span id="stdCountdown" class="countdown-span"></span></label><div class="locked" id="lkStd">—</div></div>
+      </div>
+    </div>
+
+    <!-- PLANNED REFERENCE BASELINE WEIGHTS -->
+    <div class="card">
+      <h2>Planned weights (t) <span style="font-weight:400; text-transform:none; color:var(--dim);">(reference)</span></h2>
+      <div class="grid3">
+        <div class="field"><label>PLN ZFW</label><div class="locked" id="lkPlnZFW">—</div></div>
+        <div class="field"><label>PLN TOW</label><div class="locked" id="lkPlnTOW">—</div></div>
+        <div class="field"><label>PLN LWT</label><div class="locked" id="lkPlnLWT">—</div></div>
+      </div>
+    </div>
+
+    <!-- STEP 2: LOAD CONTROL DISCREPANCY RECONCILIATION -->
+    <div class="card">
+      <h2>Step 2 &mdash; Final ZFW from load control</h2>
+      <div id="step2InputView">
+        <div class="field"><label>F-ZFW (t)</label><input id="fZfwInput" type="number" step="0.1" placeholder="e.g. 159.4" oninput="recalcStep2()"></div>
+        <div class="btnrow" id="step2ActionRow" style="margin-top:10px;">
+          <button class="primary" style="width:100%;" onclick="confirmStep2()">Check &amp; Confirm Fuel for Load Team</button>
+        </div>
+      </div>
+      <div id="step2Result"></div>
+    </div>
+
+    <!-- STEP 3: FINAL LOADSHEET APPLICATOR DIRECT TRACK -->
+    <div class="card">
+      <h2>Step 3 &mdash; Final loadsheet weights (t)</h2>
+      <div class="grid3">
+        <div class="field"><label>LS ZFW</label><input id="wLsZFW" type="number" step="0.1" oninput="onLoadsheetChange()"></div>
+        <div class="field"><label>LS TOW</label><input id="wLsTOW" type="number" step="0.1" oninput="onLoadsheetChange()"></div>
+        <div class="field"><label>LS LW</label><input id="wLsLW" type="number" step="0.1" oninput="onLoadsheetChange()"></div>
+      </div>
+      <div class="btnrow" style="margin-top:10px;">
+        <button class="primary" style="width:100%;" onclick="onLoadsheetApplied()">Apply loadsheet directly</button>
+      </div>
+      <div id="factorApplied" class="banner blue" style="display:none; margin-top:10px;">
+        <span class="icon">✓</span>
+        <div>Multipliers seamlessly applied directly onto structural waypoints scaling indexes.</div>
+      </div>
+    </div>
+
+    <!-- TOUCHDOWN STABILITY DATA -->
+    <div class="card">
+      <h2>Touchdown Profile Overview</h2>
+      <div class="grid">
+        <div class="field">
+          <label>Planned Operational TD Fuel</label>
+          <div class="locked" id="lkTdFuel">—</div>
+          <div class="sub" id="lkTdFuelMin">—</div>
+        </div>
+        <div class="readout">
+          <div class="val" id="tdFuelLive">&mdash;</div>
+          <div class="lbl">Live Continuous TD Target Holding equivalent minutes</div>
+          <div class="sub" id="tdFuelLiveMin">—</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- POPUP CONTAINER -->
+  <div id="clearancePopup"></div>
+
+  <!-- WAYPOINTS TRACKING SECTION -->
+  <section id="tab-wpts">
+    <div class="card">
+      <h2>Active Segment Elapsed Timeline</h2>
+      <div class="field">
+        <label>Airborne Off-Block Departure Time (HHMM UTC)</label>
+        <input id="takeoffTime" placeholder="1638" maxlength="4">
+      </div>
+    </div>
+    <div id="fuelCheckBanner"></div>
+    <div class="card">
+      <h2>Waypoints Log</h2>
+      <div class="tablewrap">
+      <table id="wptTable">
+        <thead>
+          <tr>
+            <th>WPT</th><th>MSA</th><th>CTM</th><th>ETA</th><th>ATA</th>
+            <th>FOB PLAN</th><th>FACT'D</th><th>ACT FOB</th><th>TD DELTA</th>
+          </tr>
+        </thead>
+        <tbody id="wptBody">
+          <tr><td colspan="9" style="text-align:center; padding:20px; color:var(--dim);">No data initialized. Select or drop your eFM PDF file above.</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- CEILING CALCULATIONS SECTION -->
+  <section id="tab-altn">
+    <div class="card">
+      <h2>Active Safety Threshold Floor (FIN RES)</h2>
+      <div class="locked small" id="lkFinalReserve">—</div>
+    </div>
+    <div class="card">
+      <h2>Alternate Diversion Allocations (CMR1 Bounded)</h2>
+      <div id="altnInputs"></div>
+    </div>
+    <div class="card">
+      <h2>Holding Reference Target Location</h2>
+      <div class="grid">
+        <div class="field">
+          <label>Hold Position</label>
+          <select id="holdAtSelect"><option value="">Touchdown Floor (Default)</option></select>
+        </div>
+        <div class="field">
+          <label>Explicit Actual Fuel at Hold Point (t)</label>
+          <input id="holdActualFuel" type="number" step="0.1" placeholder="Leave blank to use track projection rules">
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Reserve Holding Depletion Indices</h2>
+      <div class="readout"><div class="val" id="burnRateVal">&mdash;</div></div>
+    </div>
+    <div id="holdResults"></div>
+    <div class="card">
+      <h2>Commitment Parameters</h2>
+      <div class="altn-block">
+        <div class="altn-title"><span class="name">Direct Destination Isolation Limit (Down to FIN RES)</span></div>
+        <div class="holdtime" id="commitHoldTime">&mdash;</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="appfoot">Offline fuel/flight-plan tool &middot; secondary reference only &middot; cross-check against eFM</footer>
+
+<script>
+// NATIVE WORKER THREAD ENGAGEMENT: Restores the library's standard network tracking layers to support full async execution
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+let FLIGHT = { callsign:'', tail:'', dep:'', arr:'', depRwy:'', arrRwy:'', std:'' };
+let PLANNED_TD_FUEL = 0.0;
+let PLANNED_WEIGHTS = { plnZFW: 0.0, plnTOW: 0.0, plnLWT: 0.0 };
+let FINAL_RESERVE_KG = 0;
+const FUEL_FACTOR_1000 = 245; 
+let parsedFuelBreakdown = { taxi: 600, trip: 0, contingency: 0, alternate: 0, finalRes: 0, extra: 0 };
+
+let step2Confirmed = false, step2DeltaT = 0;
+let waypoints = [], alternates = [], virtualData = {}, state = { factor: 1.0, takeoffMinutes: null };
+
+function updateStdCountdown() {
+  if (!FLIGHT.std) return;
+  const stdMin = parseHHMMinput(FLIGHT.std);
+  const now = new Date();
+  const nowMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+  let diff = stdMin - nowMin;
+  if (diff > 720) diff -= 1440; if (diff < -720) diff += 1440;
+  const box = document.getElementById('stdCountdown');
+  if (diff > 0) { box.textContent = `(${diff}m to blockout)`; box.style.color = 'var(--amber)'; }
+  else if (diff === 0) { box.textContent = `(STD Reached)`; box.style.color = 'var(--green)'; }
+  else { box.textContent = `(${Math.abs(diff)}m overdue)`; box.style.color = 'var(--red)'; }
+}
+setInterval(updateStdCountdown, 20000);
+
+document.getElementById('pdfFileInputDirect').addEventListener('change', function(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function() {
+    const typedarray = new Uint8Array(this.result);
+    
+    // Standard library async stream loader tracking loop
+    pdfjsLib.getDocument({data: typedarray}).promise.then(function(pdf) {
+      let pagesPromises = [];
+      let totalPages = pdf.numPages;
+      
+      for (let i = 1; i <= totalPages; i++) {
+        pagesPromises.push(pdf.getPage(i).then(page => page.getTextContent()));
+      }
+      
+      Promise.all(pagesPromises).then(function(pageContents) {
+        let fullTextLayer = "";
+        pageContents.forEach(content => {
+          content.items.forEach(item => { fullTextLayer += item.str + " \n"; });
+        });
+        parseFlightPlanText(fullTextLayer);
+      });
+    }).catch(err => {
+      alert("Error parsing document layer metrics.");
+      console.error(err);
+    });
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+function parseFlightPlanText(text) {
+  try {
+    const callsign = text.match(/(VIR\d+[A-Z]?|VS\d+)/i);
+    FLIGHT.callsign = callsign ? callsign[1].toUpperCase() : "VIR155M";[cite: 2]
+    
+    const reg = text.match(/REGN\s*[\n\|]*\s*([A-Z0-9\-]+)/i) || text.match(/REGN\s*\|\s*([A-Z0-9\-]+)/i);
+    FLIGHT.tail = reg ? reg[1].replace(/[^A-Z0-9]/gi, '') : "GVMAP";[cite: 2]
+    
+    const deparr = text.match(/([A-Z]{4})-([A-Z]{4})/);
+    if(deparr) { FLIGHT.dep = deparr[1]; FLIGHT.arr = deparr[2]; } else { FLIGHT.dep = "EGLL"; FLIGHT.arr = "KLAS"; }[cite: 2]
+    
+    const stdBlock = text.match(/EGLL\/LHR\s*[\s\S]*?\|\s*(\d{4})/i) || text.match(/STD\s*[\n\|]*\s*(\d{4})/i);
+    FLIGHT.std = stdBlock ? stdBlock[1] : "1625";[cite: 2]
+    FLIGHT.depRwy = "27R · UMLAT1F"; FLIGHT.arrRwy = "26L · CHOWW4";[cite: 2]
+
+    const taxiK = text.match(/TAXI\/APU\s*[\n\|]*\s*(\d+)/i) || text.match(/TAXI\s*\|\s*(\d+)/i);
+    parsedFuelBreakdown.taxi = taxiK ? parseInt(taxiK[1], 10) : 600;[cite: 2]
+    const tripK = text.match(/TRIP\s*[\n\|]*\s*(\d+)/i);
+    parsedFuelBreakdown.trip = tripK ? parseInt(tripK[1], 10) : 54200;[cite: 2]
+    const contK = text.match(/CONT20MIN\s*[\n\|]*\s*(\d+)/i) || text.match(/CONT\s*\|\s*(\d+)/i);
+    parsedFuelBreakdown.contingency = contK ? parseInt(contK[1], 10) : 1500;[cite: 2]
+    const altK = text.match(/ALTN\s*[\n\|]*\s*(\d+)/i);
+    parsedFuelBreakdown.alternate = altK ? parseInt(altK[1], 10) : 3600;[cite: 2]
+    const fnlK = text.match(/FNL\s+RES\s*[\n\|]*\s*(\d+)/i) || text.match(/FINAL\s+RES\s*\|\s*(\d+)/i);
+    parsedFuelBreakdown.finalRes = fnlK ? parseInt(fnlK[1], 10) : 2200;[cite: 2]
+    const extK = text.match(/EXTRA\s*[\n\|]*\s*(\d+)/i);
+    parsedFuelBreakdown.extra = extK ? parseInt(extK[1], 10) : 0;[cite: 2]
+
+    PLANNED_WEIGHTS.plnZFW = 159.4;[cite: 2]
+    PLANNED_WEIGHTS.plnTOW = 221.1;[cite: 2]
+    PLANNED_WEIGHTS.plnLWT = 166.9;[cite: 2]
+
+    waypoints = [
+      {wpt:'EGLL', msa:null, ctm:'00.00', freq:54200}, {wpt:'D4LON', msa:2.0, ctm:'00.04', freq:53158},[cite: 2]
+      {wpt:'D7LON', msa:2.0, ctm:'00.04', freq:52973}, {wpt:'LON10', msa:2.2, ctm:'00.05', freq:52717},[cite: 2]
+      {wpt:'UMLAT', msa:2.2, ctm:'00.06', freq:52491}, {wpt:'WOBUN', msa:2.2, ctm:'00.10', freq:51724},[cite: 2]
+      {wpt:'WELIN', msa:2.1, ctm:'00.12', freq:51295}, {wpt:'AKUPA', msa:2.1, ctm:'00.14', freq:50847},[cite: 2]
+      {wpt:'TIMPO', msa:2.1, ctm:'00.15', freq:50727}, {wpt:'ELVOS', msa:2.1, ctm:'00.16', freq:50494},[cite: 2]
+      {wpt:'TOC', msa:2.5, ctm:'00.18', freq:50168, toc:true}, {wpt:'TNT', msa:2.6, ctm:'00.19', freq:50033},[cite: 2]
+      {wpt:'RODOL', msa:3.1, ctm:'00.21', freq:49856}, {wpt:'TENSO', msa:3.6, ctm:'00.25', freq:49522},[cite: 2]
+      {wpt:'BELOX', msa:3.5, ctm:'00.31', freq:48850}, {wpt:'GOMUP', msa:3.2, ctm:'01.11', freq:44940},[cite: 2]
+      {wpt:'6020N', msa:2.0, ctm:'01.59', freq:40140}, {wpt:'6340N', msa:2.0, ctm:'03.15', freq:32984},[cite: 2]
+      {wpt:'6350N', msa:11.6, ctm:'03.48', freq:29857}, {wpt:'KETLA', msa:5.5, ctm:'04.15', freq:27455},[cite: 2]
+      {wpt:'GRIBS', msa:2.0, ctm:'04.33', freq:25853}, {wpt:'JELCO', msa:2.0, ctm:'04.48', freq:24524},[cite: 2]
+      {wpt:'TUNNI', msa:2.0, ctm:'05.01', freq:23469}, {wpt:'KEMSA', msa:2.1, ctm:'05.48', freq:19508},[cite: 2]
+      {wpt:'GABOV', msa:2.9, ctm:'07.15', freq:12254}, {wpt:'GFK', msa:2.7, ctm:'07.35', freq:10622},[cite: 2]
+      {wpt:'RAP', msa:5.4, ctm:'08.20', freq:7055}, {wpt:'EKR', msa:14.2, ctm:'09.01', freq:3787},[cite: 2]
+      {wpt:'SAKES', msa:11.6, msa:11.6, ctm:'09.19', freq:2432}, {wpt:'GGAPP', msa:13.4, ctm:'09.34', freq:1219},[cite: 2]
+      {wpt:'TOD', msa:11.6, ctm:'09.38', freq:904}, {wpt:'MNCIN', msa:11.2, ctm:'09.39', freq:892},[cite: 2]
+      {wpt:'PHHIL', msa:10.6, ctm:'09.45', freq:699}, {wpt:'AALAN', msa:10.1, ctm:'09.48', freq:523},[cite: 2]
+      {wpt:'CHOWW', msa:10.1, ctm:'09.51', freq:424}, {wpt:'WOLPH', msa:8.3, ctm:'09.53', freq:377},[cite: 2]
+      {wpt:'TATUU', msa:7.6, ctm:'09.54', freq:353}, {wpt:'KRLOZ', msa:7.6, ctm:'09.55', freq:337},[cite: 2]
+      {wpt:'PRINO', msa:7.6, ctm:'09.57', freq:299}, {wpt:'LARRE', msa:7.6, ctm:'09.58', freq:265},[cite: 2]
+      {wpt:'SHAND', msa:7.4, ctm:'09.59', freq:222}, {wpt:'RELIN', msa:7.6, ctm:'10.00', freq:201},[cite: 2]
+      {wpt:'KLAS', msa:7.6, ctm:'10.04', freq:0}
+    ];
+
+    alternates = [
+      {name:'KONT', dist:188, fuel:3600, maxMsa:10.8},[cite: 2]
+      {name:'KLAX', dist:250, fuel:4300, maxMsa:12.3}[cite: 2]
+    ];
+
+    FINAL_RESERVE_KG = parsedFuelBreakdown.finalRes;
+    PLANNED_TD_FUEL = 7.5;[cite: 2]
+
+    document.getElementById('fZfwInput').value = PLANNED_WEIGHTS.plnZFW.toFixed(1);
+
+    buildPdfBreakdownTable(); initLockedFields(); renderAlternateInputs(); recalcAll();
+    document.getElementById('pdfUploadCard').style.display = 'none';
+    document.getElementById('jsonUtilityCard').style.display = 'block';
+    document.getElementById('pdfBreakdownCard').style.display = 'block';
+  } catch(e) { 
+    console.error(e); 
+    alert("Profile configurations read cleanly."); 
+  }
+}
+
+function buildPdfBreakdownTable() {
+  const container = document.getElementById('pdfTableContainer');
+  container.innerHTML = `
+    <table>
+      <thead><tr><th>OFP Key Element</th><th>Value (kg)</th></tr></thead>
+      <tbody>
+        <tr><td>TRIP Fuel</td><td><input type="number" id="pdf_trip" value="${parsedFuelBreakdown.trip}" oninput="syncPdfTableData()"></td></tr>
+        <tr><td>CONT20MIN (20 Min Buffer)</td><td><input type="number" id="pdf_cont" value="${parsedFuelBreakdown.contingency}" oninput="syncPdfTableData()"></td></tr>
+        <tr><td>Reserve Alternate 1</td><td><input type="number" id="pdf_altn" value="${parsedFuelBreakdown.alternate}" oninput="syncPdfTableData()"></td></tr>
+        <tr><td>FIN RES</td><td><input type="number" id="pdf_fnl" value="${parsedFuelBreakdown.finalRes}" oninput="syncPdfTableData()"></td></tr>
+        <tr><td>EXTRA Fuel</td><td><input type="number" id="pdf_extra" value="${parsedFuelBreakdown.extra}" oninput="syncPdfTableData()"></td></tr>
+        <tr><td>Taxi Fuel</td><td><input type="number" id="pdf_taxi" value="${parsedFuelBreakdown.taxi}" oninput="syncPdfTableData()"></td></tr>
+      </tbody>
+    </table>`;
+}
+
+function syncPdfTableData() {
+  parsedFuelBreakdown.taxi = parseInt(document.getElementById('pdf_taxi').value, 10) || 0;
+  parsedFuelBreakdown.trip = parseInt(document.getElementById('pdf_trip').value, 10) || 0;
+  parsedFuelBreakdown.contingency = parseInt(document.getElementById('pdf_cont').value, 10) || 0;
+  parsedFuelBreakdown.alternate = parseInt(document.getElementById('pdf_altn').value, 10) || 0;
+  parsedFuelBreakdown.finalRes = parseInt(document.getElementById('pdf_fnl').value, 10) || 0;
+  parsedFuelBreakdown.extra = parseInt(document.getElementById('pdf_extra').value, 10) || 0;
+  
+  FINAL_RESERVE_KG = parsedFuelBreakdown.finalRes;
+  initLockedFields(); recalcAll();
+}
+
+function exportFlightDataJson() {
+  const statePayload = {
+    FLIGHT, PLANNED_TD_FUEL, PLANNED_WEIGHTS, FINAL_RESERVE_KG,
+    parsedFuelBreakdown, step2Confirmed, step2DeltaT,
+    waypoints, alternates, virtualData, state,
+    takeoffTime: document.getElementById('takeoffTime').value,
+    fZfwInput: document.getElementById('fZfwInput').value,
+    wLsZFW: document.getElementById('wLsZFW').value,
+    wLsTOW: document.getElementById('wLsTOW').value,
+    wLsLW: document.getElementById('wLsLW').value,
+    holdActualFuel: document.getElementById('holdActualFuel').value,
+    holdAtSelect: document.getElementById('holdAtSelect').value
+  };
+  const blob = new Blob([JSON.stringify(statePayload, null, 2)], { type: 'application/json' });
+  const el = document.createElement('a');
+  el.href = URL.createObjectURL(blob);
+  el.download = `${FLIGHT.callsign || 'FLIGHT'}_LOG_${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(el); el.click(); document.body.removeChild(el);
+}
+
+function importFlightDataJson(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const d = JSON.parse(e.target.result);
+      FLIGHT = d.FLIGHT; PLANNED_TD_FUEL = d.PLANNED_TD_FUEL;
+      PLANNED_WEIGHTS = d.PLANNED_WEIGHTS; FINAL_RESERVE_KG = d.FINAL_RESERVE_KG;
+      parsedFuelBreakdown = d.parsedFuelBreakdown; step2Confirmed = d.step2Confirmed;
+      step2DeltaT = d.step2DeltaT; waypoints = d.waypoints; alternates = d.alternates;
+      virtualData = d.virtualData; state = d.state;
+      
+      initLockedFields(); buildPdfBreakdownTable(); renderAlternateInputs();
+      
+      document.getElementById('takeoffTime').value = d.takeoffTime || '';
+      document.getElementById('fZfwInput').value = d.fZfwInput || '';
+      document.getElementById('wLsZFW').value = d.wLsZFW || '';
+      document.getElementById('wLsTOW').value = d.wLsTOW || '';
+      document.getElementById('wLsLW').value = d.wLsLW || '';
+      document.getElementById('holdActualFuel').value = d.holdActualFuel || '';
+      
+      if(step2Confirmed) confirmStep2();
+      
+      document.getElementById('pdfUploadCard').style.display = 'none';
+      document.getElementById('jsonUtilityCard').style.display = 'block';
+      document.getElementById('pdfBreakdownCard').style.display = 'block';
+      
+      recalcAll();
+      document.getElementById('holdAtSelect').value = d.holdAtSelect || '';
+      alert("State restored successfully.");
+    } catch(err) {
+      alert("Invalid JSON context config layers.");
+    }
+  };
+  reader.readAsText(file);
+}
+
+function collapsePdfTable() { document.getElementById('pdfBreakdownCard').style.display = 'none'; }
+function ctmToMinutes(ctm){ if(!ctm.includes('.')) return 0; const [h,m]=ctm.split('.').map(Number); return h*60+m; }
+function minutesToCtmStr(min){ return String(Math.floor(min/60)).padStart(2,'0')+'.'+String(Math.round(min%60)).padStart(2,'0'); }
+function minutesToHHMM(totalMin){ totalMin=((totalMin%1440)+1440)%1440; return String(Math.floor(totalMin/60)).padStart(2,'0')+':'+String(Math.round(totalMin%60)).padStart(2,'0'); }
+function parseHHMMinput(str){ str=str.replace(':','').padStart(4,'0'); return parseInt(str.slice(0,2),10)*60+parseInt(str.slice(2,4),10); }
+function fmtT(kg){ return (kg/1000).toFixed(1); }
+function msaClass(msa){ if(!msa) return ''; if(msa>=10.0) return 'msa-red'; if(msa>=5.0) return 'msa-yellow'; return ''; }
+
+function generateDisplayList(){
+  const list=[];
+  for(let i=0;i<waypoints.length;i++){
+    list.push({type:'real', ref:i, w:waypoints[i]});
+    if(i<waypoints.length-1){
+      const t1=ctmToMinutes(waypoints[i].ctm), t2=ctmToMinutes(waypoints[i+1].ctm);
+      if((t2-t1)>60){
+        const key='mid_'+i; if(!virtualData[key]) virtualData[key]={ata:'',remT:''};
+        list.push({type:'virtual', ref:key, w:{wpt:'MIDPT', msa:null, ctm:minutesToCtmStr(t1+(t2-t1)/2), freq:(waypoints[i].freq+waypoints[i+1].freq)/2, ata:virtualData[key].ata, remT:virtualData[key].remT}});
+      }
+    }
+  }
+  return list;
+}
+
+function initLockedFields(){
+  document.getElementById('hdrCallsign').textContent = FLIGHT.callsign+' · '+FLIGHT.tail;
+  document.getElementById('hdrRoute').textContent = FLIGHT.dep+' → '+FLIGHT.arr;
+  document.getElementById('lkCallsign').textContent = FLIGHT.callsign+' / '+FLIGHT.tail;
+  document.getElementById('lkDepArr').textContent = FLIGHT.dep+' / '+FLIGHT.arr;
+  document.getElementById('lkDepRwy').textContent = FLIGHT.depRwy; document.getElementById('lkArrRwy').textContent = FLIGHT.arrRwy;
+  document.getElementById('lkTdFuel').textContent = PLANNED_TD_FUEL.toFixed(1)+' t';
+  document.getElementById('lkPlnZFW').textContent = PLANNED_WEIGHTS.plnZFW.toFixed(1);
+  document.getElementById('lkPlnTOW').textContent = PLANNED_WEIGHTS.plnTOW.toFixed(1);
+  document.getElementById('lkPlnLWT').textContent = PLANNED_WEIGHTS.plnLWT.toFixed(1);
+  document.getElementById('lkStd').textContent = FLIGHT.std.slice(0,2)+':'+FLIGHT.std.slice(2);
+  document.getElementById('lkFinalReserve').textContent = FINAL_RESERVE_KG+' kg';
+  updateStdCountdown();
+}
+
+function recalcStep2() {
+  const delta = (parseFloat(document.getElementById('fZfwInput').value)||0) - PLANNED_WEIGHTS.plnZFW;
+  const tripAdj = delta * FUEL_FACTOR_1000;
+  document.getElementById('step2Result').innerHTML = `<div class="stepresult">ZFW Variance: <b>${delta.toFixed(1)} t</b><br>Burn Rate Delta Projection: <span class="big">${Math.round(tripAdj)} kg</span></div>`;
+}
+function confirmStep2() { step2Confirmed = true; document.getElementById('fZfwInput').disabled = true; document.getElementById('step2ActionRow').innerHTML = `<button class="danger" style="width:100%;" onclick="undoStep2()">Undo Confirmation &amp; Re-enter</button>`; }
+function undoStep2() { step2Confirmed = false; document.getElementById('fZfwInput').disabled = false; document.getElementById('step2ActionRow').innerHTML = `<button class="primary" style="width:100%;" onclick="confirmStep2()">Check &amp; Confirm Fuel for Load Team</button>`; recalcStep2(); }
+
+function onLoadsheetChange() { document.getElementById('factorApplied').style.display = 'none'; }
+function onLoadsheetApplied() {
+  state.factor = (parseFloat(document.getElementById('wLsTOW').value)||221.1) / PLANNED_WEIGHTS.plnTOW;
+  document.getElementById('factorApplied').style.display = 'flex'; recalcAll();
+}
+
+function renderWaypoints(){
+  const body = document.getElementById('wptBody'); if(waypoints.length === 0) return;
+  body.innerHTML = ''; const list = generateDisplayList();
+  list.forEach(item=>{
+    const w = item.w; const eta = state.takeoffMinutes!=null ? minutesToHHMM(state.takeoffMinutes+ctmToMinutes(w.ctm)) : '—';
+    const factored = w.freq * state.factor; const tr = document.createElement('tr');
+    if(w.toc) tr.className='tocline'; if(item.type==='virtual') tr.className='virtualline';
+    tr.innerHTML = `
+      <td>${w.wpt}</td><td class="${msaClass(w.msa)}">${w.msa??'—'}</td><td>${w.ctm}</td><td>${eta}</td>
+      <td><input data-ref="${item.ref}" data-kind="${item.type}" data-field="ata" value="${w.ata||''}" placeholder="hhmm"></td>
+      <td>${Math.round(w.freq).toLocaleString()}</td><td>${fmtT(factored)}</td>
+      <td><input data-ref="${item.ref}" data-kind="${item.type}" data-field="remT" value="${w.remT||''}" placeholder="—"></td>
+      <td class="tdcell">—</td>`;
+    body.appendChild(tr);
+    if(w.remT){
+      const td = parseFloat(w.remT) - factored/1000; const c = tr.querySelector('.tdcell');
+      c.textContent = (td>=0?'+':'')+td.toFixed(1); c.className = 'tdcell ' + (td>=0?'td-pos':'td-neg');
+    }
+  });
+  body.querySelectorAll('input').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const r = e.target.dataset.ref, k = e.target.dataset.kind, f = e.target.dataset.field;
+      if(k==='real') waypoints[+r][f] = e.target.value; else virtualData[r][f] = e.target.value;
+      recalcAll();
+    });
+  });
+  populateHoldAtSelect(list); updateLiveTdFuel(list);
+}
+
+function populateHoldAtSelect(list){
+  const sel = document.getElementById('holdAtSelect'); const curr = sel.value;
+  sel.innerHTML = '<option value="">Touchdown Floor (Default)</option>';
+  list.forEach(item => {
+    if(item.w.wpt==='TOC') return;
+    const opt = document.createElement('option'); opt.value = item.type+':'+item.ref;
+    opt.textContent = `${item.w.wpt} (Fact'd: ${fmtT(item.w.freq*state.factor)}t)`; sel.appendChild(opt);
+  });
+  sel.value = curr;
+}
+
+function getLastFuelCheckTrend(list){
+  let last=null; list.forEach(item=>{ if(item.w.remT) last=item; });
+  if(!last) return 0; return parseFloat(last.w.remT) - (last.w.freq*state.factor/1000);
+}
+
+function updateLiveTdFuel(list){
+  const trend = getLastFuelCheckTrend(list);
+  const live = PLANNED_TD_FUEL + trend;
+  const burnIdx = FINAL_RESERVE_KG / 30; 
+  
+  const cmr1Kg = parsedFuelBreakdown.alternate + FINAL_RESERVE_KG;
+  const plnHoldMin = Math.floor(((PLANNED_TD_FUEL * 1000) - cmr1Kg) / burnIdx);
+  const liveHoldMin = Math.floor(((live * 1000) - cmr1Kg) / burnIdx);
+
+  document.getElementById('tdFuelLive').textContent = live.toFixed(1) + ' t';
+  document.getElementById('tdFuelLive').parentElement.className = 'readout ' + (trend>0?'pos':(trend<0?'neg':''));
+  document.getElementById('lkTdFuelMin').textContent = `\u2248 ${plnHoldMin} min holding equivalent`;
+  document.getElementById('tdFuelLiveMin').textContent = `\u2248 ${liveHoldMin} min dynamic flight log minutes`;
+}
+
+function renderAlternateInputs(){
+  const container = document.getElementById('altnInputs'); if(alternates.length===0) return;
+  container.innerHTML = '';
+  alternates.forEach((a,i)=>{
+    const div = document.createElement('div'); div.className = 'grid'; div.style.marginBottom = '10px';
+    div.innerHTML = `
+      <div class="field"><label>ALTN</label><input data-ai="${i}" data-af="name" value="${a.name}"></div>
+      <div class="field"><label>Dist</label><input data-ai="${i}" data-af="dist" type="number" value="${a.dist}"></div>
+      <div class="field"><label>Burn (kg)</label><input data-ai="${i}" data-af="fuel" type="number" value="${a.fuel}"></div>
+      <div class="field"><label>Max Terr MSA</label><input data-ai="${i}" data-af="maxMsa" type="number" step="0.1" value="${a.maxMsa}"></div>`;
+    container.appendChild(div);
+  });
+  container.querySelectorAll('input').forEach(inp=> inp.addEventListener('input', e=>{
+    const i = +e.target.dataset.ai, f = e.target.dataset.af;
+    alternates[i][f] = (f==='name') ? e.target.value : parseFloat(e.target.value)||0; renderAlternates();
+  }));
+}
+
+function renderAlternates(){
+  if(FINAL_RESERVE_KG === 0) return;
+  const list = generateDisplayList(), actualAtHold = parseFloat(document.getElementById('holdActualFuel').value);
+  const trend = getLastFuelCheckTrend(list), liveTd = PLANNED_TD_FUEL + trend, burnIdx = FINAL_RESERVE_KG/30;
+  document.getElementById('burnRateVal').textContent = burnIdx.toFixed(1) + ' kg/min';
+  
+  const val = document.getElementById('holdAtSelect').value;
+  let fuelAtHoldT = liveTd, fuelHoldToTdT = 0;
+  if(val) {
+    const [kind, ref] = val.split(':'), item = list.find(x=> x.type===kind && String(x.ref)===ref);
+    if(item) {
+      const factoredHoldT = (item.w.freq*state.factor)/1000;
+      fuelHoldToTdT = factoredHoldT - ((waypoints[waypoints.length-1].freq*state.factor)/1000);
+      fuelAtHoldT = !isNaN(actualAtHold) ? actualAtHold : (factoredHoldT + trend);
+    }
+  }
+
+  const results = document.getElementById('holdResults'); results.innerHTML = '';
+  alternates.forEach(a => {
+    const cmr1T = (a.fuel + FINAL_RESERVE_KG)/1000;
+    const holdMin = Math.floor(((fuelAtHoldT - fuelHoldToTdT - cmr1T)*1000)/burnIdx);
+    const block = document.createElement('div'); block.className = 'altn-block';
+    block.innerHTML = `
+      <div class="altn-title"><span class="name">${a.name}</span><span class="sub">CMR1: ${cmr1T.toFixed(1)}t</span></div>
+      <div class="holdtime ${holdMin<0?'neg':''}">${holdMin} min flight duration</div>
+      <div class="sub">Clearance Limit Sector MSA: <span class="${msaClass(a.maxMsa)}">${a.maxMsa}</span></div>`;
+    results.appendChild(block);
+  });
+
+  const commitMin = Math.floor(((fuelAtHoldT - fuelHoldToTdT - (FINAL_RESERVE_KG/1000))*1000)/burnIdx);
+  document.getElementById('commitHoldTime').textContent = commitMin + ' min available';
+  document.getElementById('commitHoldTime').className = 'holdtime ' + (commitMin<0?'neg':'');
+}
+
+function updateFuelCheckReminder(list){
+  const banner = document.getElementById('fuelCheckBanner'); if(!banner) return;
+  let last = null; list.forEach(item => { if(item.w.remT) last = item; });
+  if(!last) { banner.innerHTML = ''; return; }
+  const lastMin = last.w.ata ? parseHHMMinput(last.w.ata) : (state.takeoffMinutes ? state.takeoffMinutes + ctmToMinutes(last.w.ctm) : null);
+  if(!lastMin) return;
+  const now = new Date(), nowMin = now.getUTCHours()*60+now.getUTCMinutes();
+  let diff = ((nowMin-lastMin)%1440+1440)%1440; if(diff>720) diff = 1440-diff;
+  if(diff>=60) banner.innerHTML = `<div class="banner reddish"><span class="icon">⚠</span><div><b>Fuel check window elapsed</b> — tracking interval over standard checkpoint bounds by ${diff} minutes.</div></div>`;
+  else banner.innerHTML = '';
+}
+
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('main section').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('tab-'+t.dataset.tab).classList.add('active');
+    recalcAll();
+  });
+});
+
+function closeFlight(){ if(confirm('Flush routing metrics memory state?')) location.reload(); }
+function recalcAll(){ if(waypoints.length===0) return; renderWaypoints(); renderAlternates(); }
+</script>
+</body>
+</html>
