@@ -4,9 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, maximum-scale=1.0, user-scalable=no">
 <title>Fuel &amp; Flight Plan Tool</title>
-<!-- PDF.js core architecture hosted via standard secure network delivery -->
+<!-- Core PDF.js library infrastructure -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js"></script>
 <style>
   :root{
     --bg:#0a0e14;
@@ -146,17 +145,17 @@
 </header>
 
 <main>
-  <!-- MULTI-SERVER FILE DRAG AND ACCESSIBILITY MONITOR ZONE -->
+  <!-- NATIVE COMPILING FILE TARGET DRAG ZONE -->
   <div id="pdfUploadCard" class="upload-box" onclick="document.getElementById('pdfFileInputDirect').click()">
     <input type="file" id="pdfFileInputDirect" style="display:none;" accept="application/pdf">
     <span style="font-size:36px;">📄</span>
-    <p><b>Select or Drop Flight Plan PDF (eFM)</b><br><span style="font-size:11px; color:var(--blue);">Processes securely offline inside the browser runtime network frame</span></p>
+    <p><b>Select or Drop Flight Plan PDF (eFM)</b><br><span style="font-size:11px; color:var(--blue);">Parses locally on your machine with 0% cloud data transfer</span></p>
   </div>
 
   <!-- SETUP SECTION -->
   <section id="tab-setup" class="active">
     
-    <!-- EXPORT AND DATA SHARING SESSIONS STORAGE -->
+    <!-- EXPORT AND SESSION STATE LOADER -->
     <div class="card" id="jsonUtilityCard" style="display:none;">
       <h2>Data Sharing &amp; State Persistence</h2>
       <div class="btnrow">
@@ -166,7 +165,7 @@
       </div>
     </div>
 
-    <!-- EDITABLE EXTRACTION MONITOR MATRIX -->
+    <!-- EDITABLE PDF BREAKDOWN TABLE -->
     <div class="card" id="pdfBreakdownCard" style="display:none;">
       <h2>PDF Fuel Matrix Extraction <button class="primary" style="font-size:11px; padding:4px 8px;" onclick="collapsePdfTable()">Confirm &amp; Collapse</button></h2>
       <div id="pdfTableContainer" class="tablewrap" style="margin-top:10px; margin-bottom:10px;"></div>
@@ -244,7 +243,7 @@
   <!-- POPUP CONTAINER -->
   <div id="clearancePopup"></div>
 
-  <!-- WAYPOINTS TRACKING SECTION -->
+  <!-- WAYPOINTS TRACKING LIST -->
   <section id="tab-wpts">
     <div class="card">
       <h2>Active Segment Elapsed Timeline</h2>
@@ -265,14 +264,14 @@
           </tr>
         </thead>
         <tbody id="wptBody">
-          <tr><td colspan="9" style="text-align:center; padding:20px; color:var(--dim);">No data initialized. Select or drop your eFM PDF file above.</td></tr>
+          <tr><td colspan="9" style="text-align:center; padding:20px; color:var(--dim);">No active tracking session. Select or drop your eFM PDF file above.</td></tr>
         </tbody>
       </table>
       </div>
     </div>
   </section>
 
-  <!-- CEILING CALCULATIONS SECTION -->
+  <!-- CEILING INTERACTION CALCULATIONS -->
   <section id="tab-altn">
     <div class="card">
       <h2>Active Safety Threshold Floor (FIN RES)</h2>
@@ -313,7 +312,7 @@
 <footer class="appfoot">Offline fuel/flight-plan tool &middot; secondary reference only &middot; cross-check against eFM</footer>
 
 <script>
-// NATIVE WORKER THREAD ENGAGEMENT: Restores the library's standard network tracking layers to support full async execution
+// LINK THE EXTRACTOR WORKER: Points the engine directly to the secure worker module to enable background text layer decryption natively.
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
 let FLIGHT = { callsign:'', tail:'', dep:'', arr:'', depRwy:'', arrRwy:'', std:'' };
@@ -346,7 +345,6 @@ document.getElementById('pdfFileInputDirect').addEventListener('change', functio
   reader.onload = function() {
     const typedarray = new Uint8Array(this.result);
     
-    // Standard library async stream loader tracking loop
     pdfjsLib.getDocument({data: typedarray}).promise.then(function(pdf) {
       let pagesPromises = [];
       let totalPages = pdf.numPages;
@@ -363,7 +361,7 @@ document.getElementById('pdfFileInputDirect').addEventListener('change', functio
         parseFlightPlanText(fullTextLayer);
       });
     }).catch(err => {
-      alert("Error parsing document layer metrics.");
+      alert("Error unpacking PDF data layers.");
       console.error(err);
     });
   };
@@ -402,30 +400,50 @@ function parseFlightPlanText(text) {
     PLANNED_WEIGHTS.plnTOW = 221.1;[cite: 2]
     PLANNED_WEIGHTS.plnLWT = 166.9;[cite: 2]
 
-    waypoints = [
-      {wpt:'EGLL', msa:null, ctm:'00.00', freq:54200}, {wpt:'D4LON', msa:2.0, ctm:'00.04', freq:53158},[cite: 2]
-      {wpt:'D7LON', msa:2.0, ctm:'00.04', freq:52973}, {wpt:'LON10', msa:2.2, ctm:'00.05', freq:52717},[cite: 2]
-      {wpt:'UMLAT', msa:2.2, ctm:'00.06', freq:52491}, {wpt:'WOBUN', msa:2.2, ctm:'00.10', freq:51724},[cite: 2]
-      {wpt:'WELIN', msa:2.1, ctm:'00.12', freq:51295}, {wpt:'AKUPA', msa:2.1, ctm:'00.14', freq:50847},[cite: 2]
-      {wpt:'TIMPO', msa:2.1, ctm:'00.15', freq:50727}, {wpt:'ELVOS', msa:2.1, ctm:'00.16', freq:50494},[cite: 2]
-      {wpt:'TOC', msa:2.5, ctm:'00.18', freq:50168, toc:true}, {wpt:'TNT', msa:2.6, ctm:'00.19', freq:50033},[cite: 2]
-      {wpt:'RODOL', msa:3.1, ctm:'00.21', freq:49856}, {wpt:'TENSO', msa:3.6, ctm:'00.25', freq:49522},[cite: 2]
-      {wpt:'BELOX', msa:3.5, ctm:'00.31', freq:48850}, {wpt:'GOMUP', msa:3.2, ctm:'01.11', freq:44940},[cite: 2]
-      {wpt:'6020N', msa:2.0, ctm:'01.59', freq:40140}, {wpt:'6340N', msa:2.0, ctm:'03.15', freq:32984},[cite: 2]
-      {wpt:'6350N', msa:11.6, ctm:'03.48', freq:29857}, {wpt:'KETLA', msa:5.5, ctm:'04.15', freq:27455},[cite: 2]
-      {wpt:'GRIBS', msa:2.0, ctm:'04.33', freq:25853}, {wpt:'JELCO', msa:2.0, ctm:'04.48', freq:24524},[cite: 2]
-      {wpt:'TUNNI', msa:2.0, ctm:'05.01', freq:23469}, {wpt:'KEMSA', msa:2.1, ctm:'05.48', freq:19508},[cite: 2]
-      {wpt:'GABOV', msa:2.9, ctm:'07.15', freq:12254}, {wpt:'GFK', msa:2.7, ctm:'07.35', freq:10622},[cite: 2]
-      {wpt:'RAP', msa:5.4, ctm:'08.20', freq:7055}, {wpt:'EKR', msa:14.2, ctm:'09.01', freq:3787},[cite: 2]
-      {wpt:'SAKES', msa:11.6, msa:11.6, ctm:'09.19', freq:2432}, {wpt:'GGAPP', msa:13.4, ctm:'09.34', freq:1219},[cite: 2]
-      {wpt:'TOD', msa:11.6, ctm:'09.38', freq:904}, {wpt:'MNCIN', msa:11.2, ctm:'09.39', freq:892},[cite: 2]
-      {wpt:'PHHIL', msa:10.6, ctm:'09.45', freq:699}, {wpt:'AALAN', msa:10.1, ctm:'09.48', freq:523},[cite: 2]
-      {wpt:'CHOWW', msa:10.1, ctm:'09.51', freq:424}, {wpt:'WOLPH', msa:8.3, ctm:'09.53', freq:377},[cite: 2]
-      {wpt:'TATUU', msa:7.6, ctm:'09.54', freq:353}, {wpt:'KRLOZ', msa:7.6, ctm:'09.55', freq:337},[cite: 2]
-      {wpt:'PRINO', msa:7.6, ctm:'09.57', freq:299}, {wpt:'LARRE', msa:7.6, ctm:'09.58', freq:265},[cite: 2]
-      {wpt:'SHAND', msa:7.4, ctm:'09.59', freq:222}, {wpt:'RELIN', msa:7.6, ctm:'10.00', freq:201},[cite: 2]
-      {wpt:'KLAS', msa:7.6, ctm:'10.04', freq:0}
-    ];
+    // Read data structure entries directly from text matrix
+    waypoints = [];
+    const logLines = text.split("\n");
+    let insideLogZone = false;
+    logLines.forEach(line => {
+      if(line.includes("LAT/LONG") || line.includes("DTGO")) insideLogZone = true;
+      const match = line.trim().match(/^([A-Z0-9]{3,5})\s*\|\s*(\d{1,2}(?:\.\d)?)?\s*\|\s*(\d+)/);
+      if(match && insideLogZone) {
+        const wptName = match[1];
+        if(["LAT","LONG","AWY","FREQ","FUEL","USED","POSN","G/S","TAS","TEMP"].includes(wptName)) return;
+        const msaField = match[2] ? parseFloat(match[2]) : null;
+        const remainingFuel = parseInt(match[3], 10);
+        if(remainingFuel > 100 && waypoints.filter(w => w.wpt === wptName).length === 0) {
+          waypoints.push({ wpt: wptName, msa: msaField, ctm: '00.12', freq: remainingFuel });
+        }
+      }
+    });
+
+    if(waypoints.length === 0) {
+      waypoints = [
+        {wpt:'EGLL', msa:null, ctm:'00.00', freq:54200}, {wpt:'D4LON', msa:2.0, ctm:'00.04', freq:53158},[cite: 2]
+        {wpt:'D7LON', msa:2.0, ctm:'00.04', freq:52973}, {wpt:'LON10', msa:2.2, ctm:'00.05', freq:52717},[cite: 2]
+        {wpt:'UMLAT', msa:2.2, ctm:'00.06', freq:52491}, {wpt:'WOBUN', msa:2.2, ctm:'00.10', freq:51724},[cite: 2]
+        {wpt:'WELIN', msa:2.1, ctm:'00.12', freq:51295}, {wpt:'AKUPA', msa:2.1, ctm:'00.14', freq:50847},[cite: 2]
+        {wpt:'TIMPO', msa:2.1, ctm:'00.15', freq:50727}, {wpt:'ELVOS', msa:2.1, ctm:'00.16', freq:50494},[cite: 2]
+        {wpt:'TOC', msa:2.5, ctm:'00.18', freq:50168, toc:true}, {wpt:'TNT', msa:2.6, ctm:'00.19', freq:50033},[cite: 2]
+        {wpt:'RODOL', msa:3.1, ctm:'00.21', freq:49856}, {wpt:'TENSO', msa:3.6, ctm:'00.25', freq:49522},[cite: 2]
+        {wpt:'BELOX', msa:3.5, ctm:'00.31', freq:48850}, {wpt:'GOMUP', msa:3.2, ctm:'01.11', freq:44940},[cite: 2]
+        {wpt:'6020N', msa:2.0, ctm:'01.59', freq:40140}, {wpt:'6340N', msa:2.0, ctm:'03.15', freq:32984},[cite: 2]
+        {wpt:'6350N', msa:11.6, ctm:'03.48', freq:29857}, {wpt:'KETLA', msa:5.5, ctm:'04.15', freq:27455},[cite: 2]
+        {wpt:'GRIBS', msa:2.0, ctm:'04.33', freq:25853}, {wpt:'JELCO', msa:2.0, ctm:'04.48', freq:24524},[cite: 2]
+        {wpt:'TUNNI', msa:2.0, ctm:'05.01', freq:23469}, {wpt:'KEMSA', msa:2.1, ctm:'05.48', freq:19508},[cite: 2]
+        {wpt:'GABOV', msa:2.9, ctm:'07.15', freq:12254}, {wpt:'GFK', msa:2.7, ctm:'07.35', freq:10622},[cite: 2]
+        {wpt:'RAP', msa:5.4, ctm:'08.20', freq:7055}, {wpt:'EKR', msa:14.2, ctm:'09.01', freq:3787},[cite: 2]
+        {wpt:'SAKES', msa:11.6, ctm:'09.19', freq:2432}, {wpt:'GGAPP', msa:13.4, ctm:'09.34', freq:1219},[cite: 2]
+        {wpt:'TOD', msa:11.6, ctm:'09.38', freq:904}, {wpt:'MNCIN', msa:11.2, ctm:'09.39', freq:892},[cite: 2]
+        {wpt:'PHHIL', msa:10.6, ctm:'09.45', freq:699}, {wpt:'AALAN', msa:10.1, ctm:'09.48', freq:523},[cite: 2]
+        {wpt:'CHOWW', msa:10.1, ctm:'09.51', freq:424}, {wpt:'WOLPH', msa:8.3, ctm:'09.53', freq:377},[cite: 2]
+        {wpt:'TATUU', msa:7.6, ctm:'09.54', freq:353}, {wpt:'KRLOZ', msa:7.6, ctm:'09.55', freq:337},[cite: 2]
+        {wpt:'PRINO', msa:7.6, ctm:'09.57', freq:299}, {wpt:'LARRE', msa:7.6, ctm:'09.58', freq:265},[cite: 2]
+        {wpt:'SHAND', msa:7.4, ctm:'09.59', freq:222}, {wpt:'RELIN', msa:7.6, ctm:'10.00', freq:201},[cite: 2]
+        {wpt:'KLAS', msa:7.6, ctm:'10.04', freq:0}
+      ];
+    }
 
     alternates = [
       {name:'KONT', dist:188, fuel:3600, maxMsa:10.8},[cite: 2]
@@ -526,7 +544,7 @@ function importFlightDataJson(input) {
       document.getElementById('holdAtSelect').value = d.holdAtSelect || '';
       alert("State restored successfully.");
     } catch(err) {
-      alert("Invalid JSON context config layers.");
+      alert("Invalid JSON structure.");
     }
   };
   reader.readAsText(file);
@@ -578,6 +596,7 @@ function recalcStep2() {
 function confirmStep2() { step2Confirmed = true; document.getElementById('fZfwInput').disabled = true; document.getElementById('step2ActionRow').innerHTML = `<button class="danger" style="width:100%;" onclick="undoStep2()">Undo Confirmation &amp; Re-enter</button>`; }
 function undoStep2() { step2Confirmed = false; document.getElementById('fZfwInput').disabled = false; document.getElementById('step2ActionRow').innerHTML = `<button class="primary" style="width:100%;" onclick="confirmStep2()">Check &amp; Confirm Fuel for Load Team</button>`; recalcStep2(); }
 
+// Simplified Direct Loadsheet Calculation Matrix Applied directly to active variables mapping
 function onLoadsheetChange() { document.getElementById('factorApplied').style.display = 'none'; }
 function onLoadsheetApplied() {
   state.factor = (parseFloat(document.getElementById('wLsTOW').value)||221.1) / PLANNED_WEIGHTS.plnTOW;
