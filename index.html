@@ -118,6 +118,12 @@
 
   <section id="tab-setup" class="active">
 
+    <div class="card" id="rawTextCard" style="display:none;">
+      <h2>Raw extracted text <button class="secondary small" onclick="copyRawText()">Copy</button></h2>
+      <p class="sub" style="margin-top:-4px;">This is exactly what pdf.js pulled from your PDF. Paste this (or the relevant parts) back to get the parsing patterns fixed to match your real layout.</p>
+      <textarea id="rawTextArea" readonly style="width:100%; height:220px; background:var(--panel2); border:1px solid var(--line); color:var(--text); font-family:var(--mono); font-size:11px; border-radius:8px; padding:8px;"></textarea>
+    </div>
+
     <div class="card" id="jsonUtilityCard" style="display:none;">
       <h2>Data Sharing &amp; State Persistence</h2>
       <div class="btnrow">
@@ -241,7 +247,7 @@ let PLANNED_TD_FUEL = 0;
 let PLANNED_WEIGHTS = { plnZFW:0, plnTOW:0, plnLWT:0 };
 let FINAL_RESERVE_KG = 0;
 let FUEL_FACTOR_1000 = 0;
-let parsedFuelBreakdown = { taxi:'', trip:'', contingency:'', alternate:'', finalRes:'', extra:'' };
+let parsedFuelBreakdown = { taxi:'', trip:'', contingency:'', finalRes:'', extra:'', disc:'', arrDly:'', ramp:'' };
 
 let step2Confirmed=false, step2DeltaT=0;
 let waypoints=[], alternates=[], virtualData={}, state={factor:1.0, takeoffMinutes:null};
@@ -286,15 +292,23 @@ document.getElementById('fileInputField').addEventListener('change', async funct
     for(let i=1;i<=pdf.numPages;i++){
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
-      text += content.items.map(it=>it.str).join(' ') + '\n';
+      text += content.items.map(it=>it.str).join('\n') + '\n';
     }
     statusEl.textContent = '';
+    lastRawText = text;
     parseFlightPlanText(text);
   } catch(err){
     console.error(err);
     statusEl.textContent = 'Could not read that PDF (' + err.message + '). Enter data manually below.';
   }
 });
+
+let lastRawText = '';
+function copyRawText(){
+  const ta = document.getElementById('rawTextArea');
+  ta.select();
+  document.execCommand('copy');
+}
 
 function matchFirst(text, patterns){
   for(const p of patterns){
@@ -305,36 +319,88 @@ function matchFirst(text, patterns){
 }
 
 function parseFlightPlanText(text){
-  const t = text.replace(/\s+/g,' ');
+  const flat = text.replace(/\s+/g,' ');
+  const headerEndIdx = flat.indexOf('SCF NIL');
+  const header = headerEndIdx>-1 ? flat.slice(0, headerEndIdx) : flat.slice(0, 3000);
 
-  FLIGHT.callsign = matchFirst(t, [/\b([A-Z]{2,3}\d{2,4}[A-Z]?)\b/]);
-  FLIGHT.tail = matchFirst(t, [/\b(G-[A-Z]{4})\b/, /\bREGN[:\s]*([A-Z0-9-]{4,7})\b/i, /\b(N\d{2,5}[A-Z]{0,2})\b/]);
-  const airports = [...t.matchAll(/\b([A-Z]{4})\b/g)].map(m=>m[1]);
-  FLIGHT.dep = airports[0] || '';
-  FLIGHT.arr = airports.find(a=>a!==FLIGHT.dep) || '';
-  FLIGHT.std = matchFirst(t, [/STD[:\s]*(\d{4})/i]);
-  FLIGHT.depRwy = matchFirst(t, [/DEP.{0,10}RWY[:\s]*(\d{2}[LRC]?)/i, /RWY[:\s]*(\d{2}[LRC]?)/i]);
-  FLIGHT.arrRwy = matchFirst(t, [/ARR.{0,10}RWY[:\s]*(\d{2}[LRC]?)/i]);
+  // callsign / tail
+  let m = header.match(/([A-Z]{2,3}\d{2,4}[A-Z]?)\s+STD\s+LOCAL\s+REGN\s+([A-Z0-9-]+)/);
+  if(m){
+    FLIGHT.callsign = m[1];
+    let tail = m[2];
+    if(/^G[A-Z]{4}$/.test(tail)) tail = 'G-'+tail.slice(1);
+    FLIGHT.tail = tail;
+  }
 
-  PLANNED_WEIGHTS.plnZFW = parseFloat(matchFirst(t, [/\bZFW[:\s]*(\d{2,3}\.?\d?)/i])) || 0;
-  PLANNED_WEIGHTS.plnTOW = parseFloat(matchFirst(t, [/\bTOW[:\s]*(\d{2,3}\.?\d?)/i])) || 0;
-  PLANNED_WEIGHTS.plnLWT = parseFloat(matchFirst(t, [/\bLWT[:\s]*(\d{2,3}\.?\d?)/i, /LAND(?:ING)?\s*WT[:\s]*(\d{2,3}\.?\d?)/i])) || 0;
-  PLANNED_TD_FUEL = parseFloat(matchFirst(t, [/TD\s*FUEL[:\s]*(\d{1,2}\.?\d?)/i, /TOUCHDOWN\s*FUEL[:\s]*(\d{1,2}\.?\d?)/i])) || 0;
+  // dep / arr
+  m = header.match(/\b([A-Z]{4})-([A-Z]{4})\b/);
+  if(m){ FLIGHT.dep = m[1]; FLIGHT.arr = m[2]; }
 
-  parsedFuelBreakdown.taxi = matchFirst(t, [/TAXI(?:\/APU)?[:\s]*(\d{3,5})/i]);
-  parsedFuelBreakdown.trip = matchFirst(t, [/\bTRIP[:\s]*(\d{4,6})/i]);
-  parsedFuelBreakdown.contingency = matchFirst(t, [/CONT(?:INGENCY)?(?:20MIN)?[:\s]*(\d{2,5})/i]);
-  parsedFuelBreakdown.alternate = matchFirst(t, [/\bALTN[:\s]*(\d{2,5})/i]);
-  parsedFuelBreakdown.finalRes = matchFirst(t, [/FI?N(?:AL)?\.?\s*RES(?:ERVE)?[:\s]*(\d{3,5})/i]);
-  parsedFuelBreakdown.extra = matchFirst(t, [/EXTRA(?:\s*FUEL)?[:\s]*(\d{1,5})/i, /DISCRETIONARY[:\s]*(\d{1,5})/i]);
-  FUEL_FACTOR_1000 = parseFloat(matchFirst(t, [/(\d{2,4})\s*KG\s*PER\s*1000\s*KG/i, /(\d{2,4})\s*KG\s*\/\s*1000\s*KG/i])) || 0;
+  // STD
+  if(FLIGHT.dep){
+    m = header.match(/\/[A-Z]{3}\s+(\d{4})\s+P\d{2}\.\d{2}/);
+    if(m) FLIGHT.std = m[1];
+  }
 
+  // SID / STAR (from the route string)
+  let sid='', star='';
+  if(FLIGHT.dep){
+    m = header.match(new RegExp(FLIGHT.dep+'\\s+([A-Z]{2,6}\\d[A-Z]?)\\b'));
+    if(m) sid = m[1];
+  }
+  if(FLIGHT.arr){
+    m = header.match(new RegExp('([A-Z]{2,6}\\d[A-Z]?)\\s+'+FLIGHT.arr+'\\b'));
+    if(m) star = m[1];
+  }
+
+  // weights (kg -> tonnes)
+  const zfwKg = (header.match(/PLN ZFW[\s\S]{0,80}?(\d{6})\b/)||[])[1];
+  const towKg = (header.match(/PLN TOW[\s\S]{0,80}?(\d{6})\b/)||[])[1];
+  const lwtKg = (header.match(/PLN LWT[\s\S]{0,80}?(\d{6})\b/)||[])[1];
+  PLANNED_WEIGHTS.plnZFW = zfwKg ? parseFloat(zfwKg)/1000 : 0;
+  PLANNED_WEIGHTS.plnTOW = towKg ? parseFloat(towKg)/1000 : 0;
+  PLANNED_WEIGHTS.plnLWT = lwtKg ? parseFloat(lwtKg)/1000 : 0;
+
+  // fuel breakdown
+  parsedFuelBreakdown.trip = (header.match(/\bTRIP\s+(\d{4,6})/)||[])[1] || '';
+  parsedFuelBreakdown.contingency = (header.match(/CONT\s*20\s*MI\s*N?\s+(\d{2,5})\s+\d{2}\.\d{2}\s+ERA/i)||[])[1] || '';
+  parsedFuelBreakdown.finalRes = (header.match(/FNL RES\s+(\d{3,5})/i)||[])[1] || '';
+  parsedFuelBreakdown.extra = (header.match(/\bEXTRA\s+(\d{1,5})\s+\d{2}\.\d{2}/i)||[])[1] || '';
+  parsedFuelBreakdown.disc = (header.match(/\bDISC\s+(\d{1,5})\s+\d{2}\.\d{2}/i)||[])[1] || '';
+  parsedFuelBreakdown.arrDly = (header.match(/ARR DLY\s+(\d{1,5})/i)||[])[1] || '';
+  parsedFuelBreakdown.taxi = (header.match(/TAXI\/APU\s+(\d{2,5})/i)||[])[1] || '';
+  parsedFuelBreakdown.ramp = (header.match(/\bRAMP\s+(\d{4,6})\b/i)||[])[1] || '';
+  const tdFuelKg = (header.match(/TD FUEL\s+(\d{3,6})/i)||[])[1];
+  PLANNED_TD_FUEL = tdFuelKg ? parseFloat(tdFuelKg)/1000 : 0;
+  FUEL_FACTOR_1000 = parseFloat((header.match(/BY\s+(\d{2,4})\s*KG\s*PER\s*1000\s*KG/i)||[])[1]) || 0;
   FINAL_RESERVE_KG = parseInt(parsedFuelBreakdown.finalRes,10) || 0;
 
-  // Waypoints and alternates are NOT reliably auto-parseable from arbitrary OFP layouts yet —
-  // left empty deliberately rather than guessed, so nothing false is presented as real.
-  waypoints = [];
+  // alternates from the CMR table
   alternates = [];
+  const cmrStart = flat.indexOf('ALTN DIST FUEL TIME CMR');
+  const cmrEnd = flat.indexOf('CREW FUEL ADJ');
+  if(cmrStart>-1){
+    const region = flat.slice(cmrStart, cmrEnd>-1?cmrEnd:cmrStart+500);
+    const re = /\b([A-Z]{4})\s+(\d{2,4})\s+(\d{3,5})\s+(\d{2}\.\d{2})\b/g;
+    let am;
+    while((am = re.exec(region))){
+      alternates.push({name:am[1], dist:parseInt(am[2],10), fuel:parseInt(am[3],10), maxMsa:''});
+    }
+  }
+
+  // waypoints — line-by-line structural parse (each OFP table cell is its own line)
+  const rawLines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const cutIdx = rawLines.findIndex(l=>l.indexOf('ROUTING TO ALTERNATE')>-1);
+  const wLines = cutIdx>-1 ? rawLines.slice(0,cutIdx) : rawLines;
+  const parsed = parseWaypointsFromLines(wLines, FLIGHT.dep, FLIGHT.arr);
+  waypoints = parsed.map(w=>({wpt:w.wpt, msa:w.msa, ctm:w.ctm, freq:w.freq}));
+
+  // dep/arr runway from the waypoint table's own endpoint rows
+  if(parsed.length){
+    FLIGHT.depRwy = (parsed[0]._rwy ? parsed[0]._rwy : '') + (sid ? ' · '+sid : '');
+    const last = parsed[parsed.length-1];
+    FLIGHT.arrRwy = (last._rwy ? last._rwy : '') + (star ? ' · '+star : '');
+  }
 
   document.getElementById('fZfwInput').value = PLANNED_WEIGHTS.plnZFW ? PLANNED_WEIGHTS.plnZFW.toFixed(1) : '';
 
@@ -345,6 +411,60 @@ function parseFlightPlanText(text){
   document.getElementById('pdfUploadCard').style.display = 'none';
   document.getElementById('jsonUtilityCard').style.display = 'block';
   document.getElementById('pdfBreakdownCard').style.display = 'block';
+  document.getElementById('rawTextCard').style.display = 'block';
+  document.getElementById('rawTextArea').value = lastRawText;
+}
+
+// Waypoint table structural parser — validated against a real VS155 OFP.
+// Each PDF table cell is emitted as its own line by pdf.js; a waypoint name line
+// is always immediately followed by either a LAT/LONG line or a runway line (endpoints).
+function parseWaypointsFromLines(lines, dep, arr){
+  const LATLONG_RE = /^N\d{4}\.\d\s+W\d{5}\.\d$/;
+  const RWY_RE = /^R(\d{2}[LRC]?)$/;
+  const CTMFREQ_RE = /^(\d{2}\.\d{2})\s+(\d{1,6})$/;
+  const MSA_RE = /^\d{1,2}\.\d$/;
+  const JUNK_RE = /ENTERING A NEW FIR|^ATIS$|^ROUTING TO/;
+
+  function isProbablyName(line){
+    if(!line) return false;
+    if(JUNK_RE.test(line)) return false;
+    if(/^-?\d/.test(line)) return false;
+    if(line.indexOf(' ')>-1) return false;
+    return true;
+  }
+
+  const starts = [];
+  for(let i=0;i<lines.length-1;i++){
+    if(isProbablyName(lines[i]) && (LATLONG_RE.test(lines[i+1]) || RWY_RE.test(lines[i+1]))){
+      starts.push(i);
+    }
+  }
+
+  const out = [];
+  for(let idx=0; idx<starts.length; idx++){
+    const start = starts[idx];
+    const end = idx+1<starts.length ? starts[idx+1] : lines.length;
+    const block = lines.slice(start, end);
+    const name = block[0];
+    let ctm=null, freq=null, msa=null, rwy='';
+    const rwyMatch = block[1] && block[1].match(RWY_RE);
+    if(rwyMatch) rwy = rwyMatch[1];
+    for(const l of block){
+      const cm = CTMFREQ_RE.exec(l);
+      if(cm){ ctm=cm[1]; freq=cm[2]; break; }
+    }
+    for(const l of block){
+      if(MSA_RE.test(l)) msa = l;
+    }
+    if(name===dep && !ctm){
+      ctm = '00.00';
+      freq = block[block.length-1];
+    }
+    if(ctm && freq!=null && !isNaN(parseFloat(freq))){
+      out.push({wpt:name, msa: msa?parseFloat(msa):null, ctm:ctm, freq:parseFloat(freq), _rwy:rwy});
+    }
+  }
+  return out;
 }
 
 function buildPdfBreakdownTable(){
@@ -352,11 +472,13 @@ function buildPdfBreakdownTable(){
   container.innerHTML =
     '<table><thead><tr><th>OFP Key Element</th><th>Value (kg)</th></tr></thead><tbody>'+
     '<tr><td>TRIP Fuel</td><td><input type="number" id="pdf_trip" value="'+parsedFuelBreakdown.trip+'" oninput="syncPdfTableData()"></td></tr>'+
-    '<tr><td>Contingency</td><td><input type="number" id="pdf_cont" value="'+parsedFuelBreakdown.contingency+'" oninput="syncPdfTableData()"></td></tr>'+
-    '<tr><td>Alternate fuel</td><td><input type="number" id="pdf_altn" value="'+parsedFuelBreakdown.alternate+'" oninput="syncPdfTableData()"></td></tr>'+
+    '<tr><td>Contingency (20 min)</td><td><input type="number" id="pdf_cont" value="'+parsedFuelBreakdown.contingency+'" oninput="syncPdfTableData()"></td></tr>'+
     '<tr><td>FIN RES</td><td><input type="number" id="pdf_fnl" value="'+parsedFuelBreakdown.finalRes+'" oninput="syncPdfTableData()"></td></tr>'+
+    '<tr><td>Arrival delay fuel</td><td><input type="number" id="pdf_arrdly" value="'+parsedFuelBreakdown.arrDly+'" oninput="syncPdfTableData()"></td></tr>'+
     '<tr><td>Extra fuel</td><td><input type="number" id="pdf_extra" value="'+parsedFuelBreakdown.extra+'" oninput="syncPdfTableData()"></td></tr>'+
+    '<tr><td>Discretionary fuel</td><td><input type="number" id="pdf_disc" value="'+parsedFuelBreakdown.disc+'" oninput="syncPdfTableData()"></td></tr>'+
     '<tr><td>Taxi fuel</td><td><input type="number" id="pdf_taxi" value="'+parsedFuelBreakdown.taxi+'" oninput="syncPdfTableData()"></td></tr>'+
+    '<tr><td>Ramp fuel (total)</td><td><input type="number" id="pdf_ramp" value="'+parsedFuelBreakdown.ramp+'" oninput="syncPdfTableData()"></td></tr>'+
     '<tr><td>Fuel factor (kg/1000kg)</td><td><input type="number" id="pdf_factor" value="'+FUEL_FACTOR_1000+'" oninput="syncPdfTableData()"></td></tr>'+
     '</tbody></table>';
 }
@@ -364,9 +486,11 @@ function syncPdfTableData(){
   parsedFuelBreakdown.taxi = document.getElementById('pdf_taxi').value;
   parsedFuelBreakdown.trip = document.getElementById('pdf_trip').value;
   parsedFuelBreakdown.contingency = document.getElementById('pdf_cont').value;
-  parsedFuelBreakdown.alternate = document.getElementById('pdf_altn').value;
   parsedFuelBreakdown.finalRes = document.getElementById('pdf_fnl').value;
   parsedFuelBreakdown.extra = document.getElementById('pdf_extra').value;
+  parsedFuelBreakdown.disc = document.getElementById('pdf_disc').value;
+  parsedFuelBreakdown.arrDly = document.getElementById('pdf_arrdly').value;
+  parsedFuelBreakdown.ramp = document.getElementById('pdf_ramp').value;
   FUEL_FACTOR_1000 = parseFloat(document.getElementById('pdf_factor').value) || 0;
   FINAL_RESERVE_KG = parseInt(parsedFuelBreakdown.finalRes,10) || 0;
   initLockedFields(); recalcAll();
