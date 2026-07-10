@@ -87,7 +87,6 @@
 </header>
 
 <main>
-  <!-- Main File Ingestion Zone Linking directly to the Proxmox Core -->
   <div id="pdfUploadCard" class="upload-box" onclick="document.getElementById('fileInputField').click()">
     <input type="file" id="fileInputField" style="display:none;" accept="application/pdf">
     <span style="font-size:36px;">🚀</span>
@@ -95,7 +94,6 @@
   </div>
   <div id="parseStatus" class="sub" style="margin:-8px 0 12px;"></div>
 
-  <!-- Setup Management Viewport -->
   <section id="tab-setup" class="active">
     <div class="card" id="jsonUtilityCard" style="display:none;">
       <h2>Data Sharing &amp; State Persistence</h2>
@@ -166,7 +164,6 @@
     </div>
   </section>
 
-  <!-- Waypoints Tracking Log -->
   <section id="tab-wpts">
     <div class="card">
       <h2>Takeoff time</h2>
@@ -185,7 +182,6 @@
     </div>
   </section>
 
-  <!-- Alternates / Hold Strategy Matrix -->
   <section id="tab-altn">
     <div class="card"><h2>Final Reserve</h2><div class="locked" id="lkFinalReserve">—</div></div>
     <div class="card">
@@ -211,26 +207,22 @@
 <footer class="appfoot">Offline fuel/flight-plan tool &middot; Connected to private Proxmox Docling Ingestion Engine</footer>
 
 <script>
-// Core Global State Variables 
 let FLIGHT = null;
 let parsedFuelBreakdown = null;
 let waypoints = [];
 let PLANNED_WEIGHTS = null;
 let FINAL_RESERVE_KG = 2200;
-let PLANNED_TD_FUEL = 7.5;
 
-// Direct Integration Bridge to your Proxmox Container Network Card
 document.getElementById('fileInputField').addEventListener('change', function(e) {
   const file = e.target.files[0]; 
   if (!file) return;
   
-  document.getElementById('parseStatus').innerText = "Streaming binary log matrix down to Proxmox core handles...";
+  document.getElementById('parseStatus').innerText = "Streaming to Proxmox core...";
   
   const formData = new FormData();
   formData.append("file", file);
   
-  // Pointed to your verified static LXC dynamic routing IP configuration
-  const PROXMOX_ENGINE_URL = "http://www.parser.krsp.uk/parse-ofp";
+  const PROXMOX_ENGINE_URL = "https://www.parser.krsp.uk/parse-ofp";
 
   fetch(PROXMOX_ENGINE_URL, {
     method: "POST",
@@ -242,32 +234,23 @@ document.getElementById('fileInputField').addEventListener('change', function(e)
   })
   .then(data => {
     document.getElementById('parseStatus').innerText = "";
-    
-    // Bind network-derived elements into your application matrix
     FLIGHT = data.FLIGHT;
     parsedFuelBreakdown = data.parsedFuelBreakdown;
     waypoints = data.waypoints;
     PLANNED_WEIGHTS = data.PLANNED_WEIGHTS;
-    
     FINAL_RESERVE_KG = parsedFuelBreakdown.final_reserve || 2200;
     
-    // Auto-fill header DOM structures
     document.getElementById('hdrCallsign').innerText = FLIGHT.callsign + " / " + FLIGHT.tail;
     document.getElementById('hdrRoute').innerText = FLIGHT.dep + " ➔ " + FLIGHT.arr + " (STD: " + FLIGHT.std + "z)";
-    
     document.getElementById('lkCallsign').innerText = FLIGHT.callsign + " / " + FLIGHT.tail;
     document.getElementById('lkDepArr').innerText = FLIGHT.dep + " / " + FLIGHT.arr;
     document.getElementById('lkStd').innerText = FLIGHT.std + " UTC";
-    
     document.getElementById('lkPlnZFW').innerText = PLANNED_WEIGHTS.plnZFW.toFixed(1);
     document.getElementById('lkPlnTOW').innerText = PLANNED_WEIGHTS.plnTOW.toFixed(1);
     document.getElementById('lkPlnLWT').innerText = PLANNED_WEIGHTS.plnLWT.toFixed(1);
     document.getElementById('lkFinalReserve').innerText = (FINAL_RESERVE_KG / 1000).toFixed(1) + " t";
-    
-    // Seed Final ZFW targets automatically
     document.getElementById('fZfwInput').value = PLANNED_WEIGHTS.plnZFW.toFixed(1);
     
-    // Build Waypoint Body Structure Elements
     const body = document.getElementById('wptBody');
     body.innerHTML = "";
     waypoints.forEach(w => {
@@ -286,20 +269,17 @@ document.getElementById('fileInputField').addEventListener('change', function(e)
       body.innerHTML += row;
     });
 
-    // Reveal operational interface layout segments
     document.getElementById('pdfUploadCard').style.display = 'none';
     document.getElementById('jsonUtilityCard').style.display = 'block';
-    
     alert("Flight log profile compiled flawlessly via Proxmox server-side Docling backend.");
   })
   .catch(err => {
     console.error(err);
-    document.getElementById('parseStatus').innerText = "Network extraction failed. Verify container thread status.";
+    document.getElementById('parseStatus').innerText = "Network extraction failed. Verify cloudflared status.";
     alert("Connection trace broken. Verify your Proxmox server process state.");
   });
 });
 
-// App Layout Tab Navigation Controller Loop
 function switchTab(tabId) {
   document.querySelectorAll('header .tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('main section').forEach(s => s.classList.remove('active'));
