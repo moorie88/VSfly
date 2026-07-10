@@ -222,7 +222,7 @@ document.getElementById('fileInputField').addEventListener('change', function(e)
   const formData = new FormData();
   formData.append("file", file);
   
-  const PROXMOX_ENGINE_URL = "http://parser.krsp.uk/parse-ofp";
+  const PROXMOX_ENGINE_URL = "const PROXMOX_ENGINE_URL = "https://parser.krsp.uk/parse-ofp";";
 
   fetch(PROXMOX_ENGINE_URL, {
     method: "POST",
