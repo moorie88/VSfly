@@ -225,9 +225,10 @@ document.getElementById('fileInputField').addEventListener('change', function(e)
   const PROXMOX_ENGINE_URL = "https://parser.krsp.uk/parse-ofp";
 
   fetch(PROXMOX_ENGINE_URL, {
-    method: "POST",
-    body: formData
-  })
+  method: "POST",
+  body: formData,
+  signal: AbortSignal.timeout(120000)  // 120 second timeout
+})
   .then(response => {
     if(!response.ok) throw new Error("Private server compilation thread reported error.");
     return response.json();
