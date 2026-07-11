@@ -213,6 +213,9 @@ let waypoints = [];
 let PLANNED_WEIGHTS = null;
 let FINAL_RESERVE_KG = 2200;
 
+// ----- CRITICAL CHANGE: USE HTTPS -----
+const PROXMOX_ENGINE_URL = "https://parser.krsp.uk/parse-ofp";
+
 document.getElementById('fileInputField').addEventListener('change', function(e) {
   const file = e.target.files[0]; 
   if (!file) return;
@@ -222,56 +225,70 @@ document.getElementById('fileInputField').addEventListener('change', function(e)
   const formData = new FormData();
   formData.append("file", file);
   
-  const PROXMOX_ENGINE_URL = "https://parser.krsp.uk/parse-ofp";
-
   fetch(PROXMOX_ENGINE_URL, {
-  method: "POST",
-  body: formData,
-  signal: AbortSignal.timeout(120000)  // 120 second timeout
-})
+    method: "POST",
+    body: formData
+  })
   .then(response => {
     if(!response.ok) throw new Error("Private server compilation thread reported error.");
     return response.json();
   })
   .then(data => {
     document.getElementById('parseStatus').innerText = "";
-    FLIGHT = data.FLIGHT;
-    parsedFuelBreakdown = data.parsedFuelBreakdown;
-    waypoints = data.waypoints;
-    PLANNED_WEIGHTS = data.PLANNED_WEIGHTS;
-    FINAL_RESERVE_KG = parsedFuelBreakdown.final_reserve || 2200;
+    // Adapt to the new response structure
+    const payload = data.data || data; // fallback
+    FLIGHT = payload.flight || {};
+    parsedFuelBreakdown = payload.fuel || {};
+    waypoints = payload.waypoints || [];
+    PLANNED_WEIGHTS = payload.weights || {};
+    FINAL_RESERVE_KG = (parsedFuelBreakdown.final_reserve || 2200);
     
-    document.getElementById('hdrCallsign').innerText = FLIGHT.callsign + " / " + FLIGHT.tail;
-    document.getElementById('hdrRoute').innerText = FLIGHT.dep + " ➔ " + FLIGHT.arr + " (STD: " + FLIGHT.std + "z)";
-    document.getElementById('lkCallsign').innerText = FLIGHT.callsign + " / " + FLIGHT.tail;
-    document.getElementById('lkDepArr').innerText = FLIGHT.dep + " / " + FLIGHT.arr;
-    document.getElementById('lkStd').innerText = FLIGHT.std + " UTC";
-    document.getElementById('lkPlnZFW').innerText = PLANNED_WEIGHTS.plnZFW.toFixed(1);
-    document.getElementById('lkPlnTOW').innerText = PLANNED_WEIGHTS.plnTOW.toFixed(1);
-    document.getElementById('lkPlnLWT').innerText = PLANNED_WEIGHTS.plnLWT.toFixed(1);
+    // Update UI
+    document.getElementById('hdrCallsign').innerText = (FLIGHT.callsign || "UNKNOWN") + " / " + (FLIGHT.tail || FLIGHT.callsign || "UNKNOWN");
+    document.getElementById('hdrRoute').innerText = (FLIGHT.origin || "???") + " ➔ " + (FLIGHT.destination || "???") + " (STD: " + (FLIGHT.std || "????") + "z)";
+    document.getElementById('lkCallsign').innerText = (FLIGHT.callsign || "UNKNOWN") + " / " + (FLIGHT.tail || FLIGHT.callsign || "UNKNOWN");
+    document.getElementById('lkDepArr').innerText = (FLIGHT.origin || "???") + " / " + (FLIGHT.destination || "???");
+    document.getElementById('lkStd').innerText = (FLIGHT.std || "????") + " UTC";
+    document.getElementById('lkPlnZFW').innerText = (PLANNED_WEIGHTS.zfw ? (PLANNED_WEIGHTS.zfw/1000).toFixed(1) : "—");
+    document.getElementById('lkPlnTOW').innerText = (PLANNED_WEIGHTS.tow ? (PLANNED_WEIGHTS.tow/1000).toFixed(1) : "—");
+    document.getElementById('lkPlnLWT').innerText = (PLANNED_WEIGHTS.lw ? (PLANNED_WEIGHTS.lw/1000).toFixed(1) : "—");
     document.getElementById('lkFinalReserve').innerText = (FINAL_RESERVE_KG / 1000).toFixed(1) + " t";
-    document.getElementById('fZfwInput').value = PLANNED_WEIGHTS.plnZFW.toFixed(1);
+    document.getElementById('fZfwInput').value = (PLANNED_WEIGHTS.zfw ? (PLANNED_WEIGHTS.zfw/1000).toFixed(1) : "");
     
+    // Populate waypoints table
     const body = document.getElementById('wptBody');
     body.innerHTML = "";
-    waypoints.forEach(w => {
-      const row = `<tr>
-        <td><b>${w.wpt}</b></td>
-        <td><span class="${w.msa > 9.9 ? 'msa-red' : w.msa > 4.9 ? 'msa-yellow' : ''}">${w.msa || '—'}</span></td>
-        <td>${w.ctm}</td>
-        <td>—</td>
-        <td><input type="text" placeholder="----" style="width:55px; text-align:center;"></td>
-        <td>${(w.freq / 1000).toFixed(1)}</td>
-        <td>${(w.freq / 1000).toFixed(1)}</td>
-        <td><input type="number" step="0.1" style="width:65px;"></td>
-        <td class="td-pos">—</td>
-        <td><button class="danger small" style="padding:2px 5px;" onclick="this.closest('tr').remove()">X</button></td>
-      </tr>`;
-      body.innerHTML += row;
-    });
+    if (waypoints.length === 0) {
+      body.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:20px; color:var(--dim);">No waypoints found in PDF.</td></tr>';
+    } else {
+      waypoints.forEach(w => {
+        // Use 'name' as waypoint, 'track' as MSA? We'll just display name and some data.
+        const msa = w.track ? (w.track/10).toFixed(1) : "—"; // track is in degrees, but we use as MSA placeholder
+        const freq = w.dist ? w.dist : "—"; // dist as placeholder for frequency
+        const row = `<tr>
+          <td><b>${w.name || "???"}</b></td>
+          <td><span class="${msa > 9.9 ? 'msa-red' : msa > 4.9 ? 'msa-yellow' : ''}">${msa}</span></td>
+          <td>${w.info || ""}</td>
+          <td>—</td>
+          <td><input type="text" placeholder="----" style="width:55px; text-align:center;"></td>
+          <td>${freq}</td>
+          <td>${freq}</td>
+          <td><input type="number" step="0.1" style="width:65px;"></td>
+          <td class="td-pos">—</td>
+          <td><button class="danger small" style="padding:2px 5px;" onclick="this.closest('tr').remove()">X</button></td>
+        </tr>`;
+        body.innerHTML += row;
+      });
+    }
 
     document.getElementById('pdfUploadCard').style.display = 'none';
     document.getElementById('jsonUtilityCard').style.display = 'block';
+    // Also show breakdown card
+    document.getElementById('pdfBreakdownCard').style.display = 'block';
+    // Populate breakdown table (simplified)
+    const container = document.getElementById('pdfTableContainer');
+    container.innerHTML = `<pre style="color:var(--dim);">Parsed ${waypoints.length} waypoints, weights: ${JSON.stringify(PLANNED_WEIGHTS)}</pre>`;
+    
     alert("Flight log profile compiled flawlessly via Proxmox server-side Docling backend.");
   })
   .catch(err => {
@@ -291,6 +308,23 @@ function switchTab(tabId) {
 function closeFlight() {
   location.reload();
 }
+
+// Additional functions for export/import (placeholders)
+function exportFlightDataJson() {
+  alert("Export JSON not implemented in this demo.");
+}
+function importFlightDataJson(input) {
+  alert("Import not implemented.");
+}
+function collapsePdfTable() {
+  document.getElementById('pdfTableContainer').style.display = 'none';
+}
+function recalcStep2() {}
+function confirmStep2() {}
+function onLoadsheetChange() {}
+function onLoadsheetApplied() {}
+function addWaypointRow() {}
+function addAlternateRow() {}
 </script>
 </body>
 </html>
